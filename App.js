@@ -1,177 +1,138 @@
 import {
-  Button,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
-  ActivityIndicator,
-  Linking,
-  Image,
-} from 'react-native';
-import React, {useCallback, useEffect, useState} from 'react';
-import {
-  confirmPaymentSheetPayment,
-  initPaymentSheet,
-  presentPaymentSheet,
+  confirmPlatformPayPayment,
+  PlatformPay,
+  PlatformPayButton,
   StripeProvider,
-  useStripe,
-} from '@stripe/stripe-react-native'; // Ensure you have this import
+  usePlatformPay
+} from '@stripe/stripe-react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, SafeAreaView, StyleSheet } from 'react-native';
 
 const App = () => {
-  const [loading, setLoading] = useState(false);
-  const [iamgeUrl, setTimageUrl] = useState('');
-  const {handleURLCallback} = useStripe();
-  const handleDeepLink = useCallback(
-    async url => {
-      if (url) {
-        const stripeHandled = await handleURLCallback(url);
-        console.log(stripeHandled, 'stripeHandledstripeHandledstripeHandled');
+  const {isPlatformPaySupported} = usePlatformPay();
+  const [isApplePaySupported, setIsApplePaySupported] = useState(false);
 
-        if (stripeHandled) {
-          // This was a Stripe URL - you can return or add extra handling here as you see fit
-        } else {
-          // This was NOT a Stripe URL – handle as you normally would
-        }
-      }
-    },
-    [handleURLCallback],
-  );
   useEffect(() => {
-    const getUrlAsync = async () => {
-      const initialUrl = await Linking.getInitialURL();
-      handleDeepLink(initialUrl);
+    const checkPlatformPaySupport = async () => {
+      const applePaySupported = await isPlatformPaySupported();
+      setIsApplePaySupported(applePaySupported);
+
+      const googlePaySupported = await isPlatformPaySupported({
+        googlePay: {testEnv: true},
+      });
+      if (!googlePaySupported) {
+        Alert.alert('Google Pay is not supported.');
+      }
     };
 
-    getUrlAsync();
+    checkPlatformPaySupport();
+  }, [isPlatformPaySupported]);
 
-    const deepLinkListener = Linking.addEventListener('url', event => {
-      handleDeepLink(event.url);
-    });
-
-    return () => deepLinkListener.remove();
-  }, [handleDeepLink]);
-
-  const createCustomer = async () => {
-    const response = await fetch('https://api.stripe.com/v1/customers', {
-      method: 'POST',
-      headers: {
-        Authorization:
-          'Bearer ',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
-    if (!response.ok) {
-      throw new Error('Failed to create customer');
-    }
-    const customerData = await response.json();
-    return customerData.id;
-  };
-
-  const createEphemeralKey = async customerId => {
-    const response = await fetch('https://api.stripe.com/v1/ephemeral_keys', {
-      method: 'POST',
-      headers: {
-        Authorization:
-          'Bearer ',
-        'Stripe-Version': '2024-09-30.acacia',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({customer: customerId}).toString(),
-    });
-    if (!response.ok) {
-      throw new Error('Failed to create ephemeral key');
-    }
-    const keyData = await response.json();
-    return keyData.secret; // Return the ephemeral key secret
-  };
-
-  const createPaymentIntent = async customerId => {
-    const response = await fetch('https://api.stripe.com/v1/payment_intents', {
-      method: 'POST',
-      headers: {
-        Authorization:
-          'Bearer ',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        customer: customerId,
-        amount: 1099,
-        currency: 'eur',
-        'automatic_payment_methods[enabled]': true,
-      }).toString(),
-    });
-    if (!response.ok) {
-      throw new Error('Failed to create payment intent');
-    }
-    const paymentIntentData = await response.json();
-    return paymentIntentData.client_secret; // Return the payment intent client secret
-  };
-
-  const handlePaymentFlow = async () => {
-    setLoading(true);
+  const createPaymentIntent = async () => {
     try {
-      const customerId = await createCustomer();
-      const ephemeralKey = await createEphemeralKey(customerId);
-      const paymentIntent = await createPaymentIntent(customerId);
-
-      const response = await initPaymentSheet({
-        googlePay: {
-          merchantCountryCode: 'UK',
-          testEnv: true, // use test environment
+      const response = await fetch(
+        'https://api.stripe.com/v1/payment_intents',
+        {
+          method: 'POST',
+          headers: {
+            Authorization:
+              'Bearer key',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            amount: 1500, // Amount in cents
+            currency: 'eur',
+            'automatic_payment_methods[enabled]': true,
+          }).toString(),
         },
-        merchantDisplayName: 'GogoFarma',
-        customerId: customerId,
-        customerEphemeralKeySecret: ephemeralKey,
-        paymentIntentClientSecret: paymentIntent,
-        returnURL: 'deepLinkUrl://stripe-redirect',
-        allowsDelayedPaymentMethods: true,
-        customFlow: true,
-        defaultBillingDetails: {
-          name: 'Jane Doe',
+      );
+
+      if (!response.ok) {
+        const errorResponse = await response.json();
+        throw new Error(
+          `Failed to create payment intent: ${errorResponse.error.message}`,
+        );
+      }
+
+      const {client_secret} = await response.json();
+      return client_secret;
+    } catch (error) {
+      console.error('Error creating payment intent:', error);
+      Alert.alert('Error', error.message);
+      throw error; // Re-throw for handling in the pay function
+    }
+  };
+
+  const createPaymentMethod = async () => {
+    try {
+      const clientSecret = await createPaymentIntent();
+      const {error} = await confirmPlatformPayPayment(clientSecret, {
+        applePay: {
+          cartItems: [
+            {
+              label: 'Total',
+              amount: '15',
+              paymentType: PlatformPay.PaymentType.Immediate,
+            },
+          ],
+          merchantCountryCode: 'US',
+          currencyCode: 'USD',
+          requiredBillingContactFields: [PlatformPay.ContactField.PhoneNumber],
+        },
+        googlePay: {
+          testEnv: true,
+          merchantName: 'My merchant name',
+          merchantCountryCode: 'US',
+          currencyCode: 'USD',
+          billingAddressConfig: {
+            format: PlatformPay.BillingAddressFormat.Full,
+            isRequired: true,
+          },
         },
       });
-      console.log(response, 'errorerrorerrorerror');
-      const responseTwo = await presentPaymentSheet({});
-      const confirmResponse = await confirmPaymentSheetPayment();
 
-      setTimageUrl(responseTwo?.paymentOption?.image);
-      console.log(confirmResponse, 'Payment successful');
+      if (error) {
+        console.error('Payment error:', error);
+        Alert.alert('Payment Error', error.message);
+      } else {
+        Alert.alert('Success', 'Check the logs for payment intent details.');
+        console.log('Payment Intent:', {clientSecret});
+      }
     } catch (error) {
-      console.error('Error during payment flow:', error.message);
-    } finally {
-      setLoading(false);
+      console.error('Error creating payment method:', error);
+      Alert.alert('Error', error.message);
     }
   };
 
   return (
-    <StripeProvider publishableKey="">
-      <SafeAreaView style={styles.container}>
-        <Button onPress={handlePaymentFlow} title="Google Pay" />
-        <Image source={iamgeUrl} style={{height: 100, width: 100}} />
-        {loading && (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color="#0000ff" />
-            <Text>Processing...</Text>
-          </View>
+    <SafeAreaView style={styles.container}>
+      <StripeProvider
+        publishableKey=""
+        merchantIdentifier="Your  merchant bundel id" // Required for Apple Pay
+        urlScheme="your-url-scheme" // Required for 3D Secure and bank redirects
+      >
+        {isApplePaySupported && (
+          <PlatformPayButton
+            onPress={createPaymentMethod}
+            type={PlatformPay.ButtonType.Pay}
+            appearance={PlatformPay.ButtonStyle.WhiteOutline}
+            style={styles.payButton}
+          />
         )}
-      </SafeAreaView>
-    </StripeProvider>
+      </StripeProvider>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // justifyContent: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  loaderContainer: {
-    position: 'absolute',
-    height: '100%',
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+  payButton: {
+    width: '65%',
+    height: 50,
   },
 });
 
