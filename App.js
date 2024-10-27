@@ -56,7 +56,7 @@ const App = () => {
       method: 'POST',
       headers: {
         Authorization:
-          'Bearer sk_test_51PstVHP2uB1Z8SFX2vlytvTDEwZqADJYZ7y9dFYmTvLG2aQ8BM4Dsxfkr1sznVZdV4N7WGpMOTKGUbYHUyQgZ0qO00vBt5XETe',
+          'Bearer ',
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     });
@@ -72,7 +72,7 @@ const App = () => {
       method: 'POST',
       headers: {
         Authorization:
-          'Bearer sk_test_51PstVHP2uB1Z8SFX2vlytvTDEwZqADJYZ7y9dFYmTvLG2aQ8BM4Dsxfkr1sznVZdV4N7WGpMOTKGUbYHUyQgZ0qO00vBt5XETe',
+          'Bearer ',
         'Stripe-Version': '2024-09-30.acacia',
         'Content-Type': 'application/x-www-form-urlencoded',
       },
@@ -90,7 +90,7 @@ const App = () => {
       method: 'POST',
       headers: {
         Authorization:
-          'Bearer sk_test_51PstVHP2uB1Z8SFX2vlytvTDEwZqADJYZ7y9dFYmTvLG2aQ8BM4Dsxfkr1sznVZdV4N7WGpMOTKGUbYHUyQgZ0qO00vBt5XETe',
+          'Bearer ',
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
@@ -144,7 +144,7 @@ const App = () => {
   };
 
   return (
-    <StripeProvider publishableKey="pk_test_51PstVHP2uB1Z8SFXOdccOQXyEhPxRZfHJDaZA9i62UaZn6o4bJd6lzUZe7lDAR63tjTLaU7y5Vx0ftZgUtfKIHaC003MxMB1Dd">
+    <StripeProvider publishableKey="">
       <SafeAreaView style={styles.container}>
         <Button onPress={handlePaymentFlow} title="Google Pay" />
         <Image source={iamgeUrl} style={{height: 100, width: 100}} />
